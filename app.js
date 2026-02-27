@@ -40,6 +40,23 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// --- Lightbox ---
+
+function openLightbox(src, alt) {
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightboxImg');
+    lightboxImg.src = src;
+    lightboxImg.alt = alt;
+    lightbox.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+    const lightbox = document.getElementById('lightbox');
+    lightbox.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
 // --- Safe localStorage helpers ---
 
 function loadHistoryFromStorage() {
@@ -134,6 +151,9 @@ function init() {
     }
 
     generateBtn.addEventListener('click', generateImage);
+
+    // Lightbox close on backdrop click
+    document.getElementById('lightbox').addEventListener('click', closeLightbox);
 
     // Test API button
     const btnTestApi = document.getElementById('btnTestApi');
@@ -331,6 +351,7 @@ async function generateImage() {
         img.onload = () => {
             img.style.opacity = '1';
             imgLoadingMsg.style.display = 'none';
+            img.addEventListener('click', () => openLightbox(fullUrl, img.alt));
         };
 
         img.onerror = (e) => {
@@ -450,6 +471,10 @@ function renderHistory() {
         img.src = item.url;
         img.alt = sanitizeHTML(item.originalPrompt || item.prompt);
         img.loading = 'lazy';
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openLightbox(item.url, img.alt);
+        });
 
         const promptDiv = document.createElement('div');
         promptDiv.className = 'history-prompt';
@@ -501,6 +526,7 @@ function loadHistoryItem(item) {
     img.src = item.url;
     img.alt = sanitizeHTML(item.originalPrompt || item.prompt);
     img.className = 'result-image';
+    img.addEventListener('click', () => openLightbox(item.url, img.alt));
 
     const actions = document.createElement('div');
     actions.className = 'actions';
@@ -626,10 +652,13 @@ async function testApiConnection() {
     }
 }
 
-// Allow Ctrl+Enter to submit
+// Allow Ctrl+Enter to submit; Escape to close lightbox
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.ctrlKey) {
         generateImage();
+    }
+    if (e.key === 'Escape') {
+        closeLightbox();
     }
 });
 
