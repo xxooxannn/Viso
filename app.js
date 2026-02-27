@@ -7,21 +7,72 @@ const IMAGE_URL = 'https://gen.pollinations.ai';
 const TEXT_URL = 'https://gen.pollinations.ai/text';
 const POLLINATIONS_KEY = 'pk_pFTa9RWkfLIkPq2f'; // ⚠️ Replace with YOUR Pollinations API key
 
-// State
+// --- Utilities ---
+
+/**
+ * Escapes HTML special characters to prevent XSS when injecting
+ * user-controlled strings into innerHTML.
+ */
+function sanitizeHTML(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Shows a temporary toast notification instead of blocking alert().
+ * @param {string} message
+ * @param {'success'|'error'|'info'} type
+ */
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    // Trigger animation
+    requestAnimationFrame(() => toast.classList.add('toast-visible'));
+    setTimeout(() => {
+        toast.classList.remove('toast-visible');
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+    }, 3000);
+}
+
+// --- Safe localStorage helpers ---
+
+function loadHistoryFromStorage() {
+    try {
+        return JSON.parse(localStorage.getItem('polliprompt_history')) || [];
+    } catch {
+        return [];
+    }
+}
+
+function loadRatioFromStorage() {
+    try {
+        const raw = localStorage.getItem('polliprompt_ratio');
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+// --- State ---
 let currentMode = 'free';
 let selectedStyle = '';
 let selectedRatio = { width: 1024, height: 1024, ratio: '1:1' };
 let generatedImageUrl = null;
-let historyList = JSON.parse(localStorage.getItem('polliprompt_history')) || [];
+let historyList = loadHistoryFromStorage();
 
-// DOM Elements
+// --- DOM Elements ---
 const promptInput = document.getElementById('prompt');
 const styleOptions = document.querySelectorAll('.pill');
 const generateBtn = document.getElementById('generateBtn');
 const resultContent = document.getElementById('resultContent');
 const resultArea = document.querySelector('.result-area');
 const loadingEl = document.getElementById('loading');
-const loadingText = document.getElementById('loadingText');
 const btnSurpriseMe = document.getElementById('btnSurpriseMe');
 const btnEnhance = document.getElementById('btnEnhance');
 const enhancedPromptBox = document.getElementById('enhancedPromptBox');
@@ -31,16 +82,20 @@ const isActiveEnhanced = document.getElementById('isActiveEnhanced');
 const historyListEl = document.getElementById('historyList');
 const btnClearHistory = document.getElementById('btnClearHistory');
 
-// Initialize
+// --- Initialize ---
 function init() {
     renderHistory();
 
-    // Setup listeners
+    // Style pill listeners
     styleOptions.forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.pill').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             btn.classList.add('active');
-            selectedStyle = btn.dataset.style;
+            btn.setAttribute('aria-pressed', 'true');
+            selectedStyle = btn.dataset.style || '';
         });
     });
 
@@ -48,27 +103,33 @@ function init() {
     const ratioOptions = document.querySelectorAll('.ratio-btn');
     ratioOptions.forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.ratio-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
             selectedRatio = {
                 ratio: btn.dataset.ratio,
-                width: parseInt(btn.dataset.width),
-                height: parseInt(btn.dataset.height)
+                width: parseInt(btn.dataset.width, 10),
+                height: parseInt(btn.dataset.height, 10)
             };
-            // Save preference
             localStorage.setItem('polliprompt_ratio', JSON.stringify(selectedRatio));
         });
     });
-    
+
     // Load saved ratio preference
-    const savedRatio = localStorage.getItem('polliprompt_ratio');
+    const savedRatio = loadRatioFromStorage();
     if (savedRatio) {
-        const parsed = JSON.parse(savedRatio);
-        const matchingBtn = document.querySelector(`.ratio-btn[data-ratio="${parsed.ratio}"]`);
+        const matchingBtn = document.querySelector(`.ratio-btn[data-ratio="${savedRatio.ratio}"]`);
         if (matchingBtn) {
-            document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.ratio-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             matchingBtn.classList.add('active');
-            selectedRatio = parsed;
+            matchingBtn.setAttribute('aria-pressed', 'true');
+            selectedRatio = savedRatio;
         }
     }
 
@@ -76,7 +137,6 @@ function init() {
 
     // Test API button
     const btnTestApi = document.getElementById('btnTestApi');
-    const apiStatus = document.getElementById('apiStatus');
     if (btnTestApi) {
         btnTestApi.addEventListener('click', testApiConnection);
     }
@@ -85,10 +145,10 @@ function init() {
     btnSurpriseMe.addEventListener('click', handleSurpriseMe);
     btnEnhance.addEventListener('click', handleEnhancePrompt);
     btnUseOriginal.addEventListener('click', () => {
-        isActiveEnhanced.value = "false";
+        isActiveEnhanced.value = 'false';
         enhancedPromptBox.classList.remove('active');
     });
-    
+
     // Clear history listener
     if (btnClearHistory) {
         btnClearHistory.addEventListener('click', () => {
@@ -101,11 +161,11 @@ function init() {
     }
 }
 
-// Surprise Me
+// --- Surprise Me ---
 async function handleSurpriseMe() {
     btnSurpriseMe.disabled = true;
     btnSurpriseMe.textContent = '🎲 Generating...';
-    
+
     const randomSeed = Math.floor(Math.random() * 1000000);
     const sysPrompt = `You are a creative AI prompt generator. Generate ONE random, creative, and visually interesting image prompt. Make it unique and unexpected. Include interesting subjects, lighting, mood, and artistic style. Keep it under 150 characters. Reply ONLY with the prompt text, nothing else.
 
@@ -126,37 +186,35 @@ Just return one creative prompt like:
         const surprisePrompt = await res.text();
 
         promptInput.value = surprisePrompt.trim();
-        isActiveEnhanced.value = "false";
+        isActiveEnhanced.value = 'false';
         enhancedPromptBox.classList.remove('active');
 
     } catch (err) {
-        console.error("Surprise Me failed:", err);
-        // Fallback to hardcoded prompts if API fails
+        console.error('Surprise Me failed:', err);
         const fallbackPrompts = [
-            "A cyberpunk samurai drinking tea in a neon garden",
-            "A giant bioluminescent whale flying through space",
-            "A cozy hobbit hole made of glass in a futuristic city",
-            "A cat astronaut exploring Mars with tiny rover",
-            "A mysterious wizard hacker in a digital realm",
-            "An ancient dragon sleeping on a pile of vintage computers"
+            'A cyberpunk samurai drinking tea in a neon garden',
+            'A giant bioluminescent whale flying through space',
+            'A cozy hobbit hole made of glass in a futuristic city',
+            'A cat astronaut exploring Mars with tiny rover',
+            'A mysterious wizard hacker in a digital realm',
+            'An ancient dragon sleeping on a pile of vintage computers'
         ];
         promptInput.value = fallbackPrompts[Math.floor(Math.random() * fallbackPrompts.length)];
-        alert('Using offline prompts. Try again later for AI-generated surprises!');
+        showToast('Using offline prompts. Try again later for AI-generated surprises!', 'info');
     } finally {
         btnSurpriseMe.disabled = false;
-        btnSurpriseMe.textContent = '🎲 Surprise Me';
+        btnSurpriseMe.textContent = '🎲 Random';
     }
 }
 
-// Enhance Prompt
+// --- Enhance Prompt ---
 async function handleEnhancePrompt() {
     const currentPrompt = promptInput.value.trim();
     if (!currentPrompt) {
-        alert("Please enter a basic prompt first.");
+        showToast('Please enter a basic prompt first.', 'error');
         return;
     }
 
-    // Build style instruction based on selected style
     let styleSection = '';
     if (selectedStyle) {
         styleSection = `
@@ -182,7 +240,7 @@ Enhanced version (rich, detailed, ready for image generation):`;
 
     try {
         btnEnhance.disabled = true;
-        btnEnhance.textContent = "✨ Enhancing...";
+        btnEnhance.textContent = '✨ Enhancing...';
 
         const url = `${TEXT_URL}/${encodeURIComponent(sysPrompt)}?model=nova-fast&key=${POLLINATIONS_KEY}`;
         const res = await fetch(url);
@@ -191,35 +249,36 @@ Enhanced version (rich, detailed, ready for image generation):`;
 
         enhancedPromptText.textContent = enhancedContext.trim();
         enhancedPromptBox.classList.add('active');
-        isActiveEnhanced.value = "true";
+        isActiveEnhanced.value = 'true';
 
     } catch (err) {
-        console.error("Enhancement failed:", err);
-        alert(`Failed to enhance prompt: ${err.message}`);
+        console.error('Enhancement failed:', err);
+        showToast(`Failed to enhance prompt: ${err.message}`, 'error');
     } finally {
         btnEnhance.disabled = false;
-        btnEnhance.textContent = "✨ AI Enhance";
+        btnEnhance.textContent = '✨ AI Enhance';
     }
 }
 
-// Generate Image
+// --- Generate Image ---
 async function generateImage() {
-    resultArea.style.display = 'block';
     const basePrompt = promptInput.value.trim();
     const model = document.getElementById('model').value;
 
+    // Validate before showing result area
     if (!basePrompt) {
         showError('Please enter a description to generate an image.');
         return;
     }
 
+    resultArea.style.display = 'block';
+
     let finalPrompt = basePrompt;
-    
-    // Add enhanced prompt if active (style already included in enhancement)
-    if (isActiveEnhanced.value === "true") {
+
+    // Use enhanced prompt if active (style already included in enhancement)
+    if (isActiveEnhanced.value === 'true') {
         finalPrompt = enhancedPromptText.textContent.trim();
     } else if (selectedStyle) {
-        // Only add style if NOT using enhanced prompt
         finalPrompt += `, ${selectedStyle}`;
     }
 
@@ -229,6 +288,11 @@ async function generateImage() {
     generateBtn.textContent = 'Generating...';
 
     try {
+        // Check prompt length (Pollinations has limits)
+        if (finalPrompt.length > 2000) {
+            throw new Error(`Prompt too long (${finalPrompt.length} chars). Max is ~2000 characters.`);
+        }
+
         const encodedPrompt = encodeURIComponent(finalPrompt);
         const seed = Math.floor(Math.random() * 100000);
         const imageUrl = `${IMAGE_URL}/image/${encodedPrompt}`;
@@ -242,45 +306,34 @@ async function generateImage() {
         });
         const fullUrl = `${imageUrl}?${params.toString()}`;
 
-        // Check prompt length (Pollinations has limits)
-        if (finalPrompt.length > 2000) {
-            throw new Error(`Prompt too long (${finalPrompt.length} chars). Max is ~2000 characters.`);
-        }
-
         generatedImageUrl = fullUrl;
 
-        resultContent.innerHTML = `
-            <div style="position:relative;">
-                <img src="${fullUrl}" alt="Generated image" class="result-image"
-                     id="resultImage"
-                     style="opacity:0;transition:opacity 0.5s;"
-                     crossorigin="anonymous">
-                <div id="imgLoadingMsg" style="color:#aaa;font-size:0.9rem;margin-top:8px;">\u23f3 Loading image... (may take 10\u201330 seconds)</div>
-            </div>
-            <div class="actions">
-                <button class="action-btn" id="btnDownload">\u2b07\ufe0f Download</button>
-                <button class="action-btn" id="btnCopyPrompt">\ud83d\udccb Copy Prompt</button>
-                <button class="action-btn" id="btnRegenerate">\ud83d\udd04 Regenerate</button>
-            </div>
-            <div style="margin-top:15px;font-size:0.85rem;color:#888;background:rgba(0,0,0,0.2);padding:10px;border-radius:8px;">
-                <strong>Prompt used:</strong> ${finalPrompt}
-            </div>
-            <div style="margin-top:8px;font-size:0.75rem;color:#666;background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                <span><strong>Model:</strong> ${model}</span>
-                <span><strong>Size:</strong> ${selectedRatio.width}x${selectedRatio.height} (${selectedRatio.ratio})</span>
-            </div>
-        `;
+        // Build result DOM safely — no inline styles, uses CSS classes
+        const wrapper = document.createElement('div');
 
-        // Setup image load handlers with better error info
-        const resultImage = document.getElementById('resultImage');
-        const imgLoadingMsg = document.getElementById('imgLoadingMsg');
+        const imgWrap = document.createElement('div');
+        imgWrap.style.position = 'relative';
 
-        resultImage.onload = () => {
-            resultImage.style.opacity = 1;
+        const img = document.createElement('img');
+        img.src = fullUrl;
+        img.alt = sanitizeHTML(finalPrompt);
+        img.className = 'result-image';
+        img.id = 'resultImage';
+        img.style.opacity = '0';
+        img.style.transition = 'opacity 0.5s';
+        img.crossOrigin = 'anonymous';
+
+        const imgLoadingMsg = document.createElement('div');
+        imgLoadingMsg.id = 'imgLoadingMsg';
+        imgLoadingMsg.className = 'img-loading-msg';
+        imgLoadingMsg.textContent = '⏳ Loading image... (may take 10–30 seconds)';
+
+        img.onload = () => {
+            img.style.opacity = '1';
             imgLoadingMsg.style.display = 'none';
         };
 
-        resultImage.onerror = (e) => {
+        img.onerror = (e) => {
             console.error('[Image] Load failed:', e);
             console.error('[Image] URL:', fullUrl);
             imgLoadingMsg.textContent = `⚠️ Image failed to load. Prompt: ${finalPrompt.length} chars. Try a shorter prompt or different model.`;
@@ -288,13 +341,61 @@ async function generateImage() {
             generateBtn.textContent = 'Generate Image';
         };
 
-        // Setup action button listeners
-        document.getElementById('btnDownload').addEventListener('click', downloadImage);
-        document.getElementById('btnCopyPrompt').addEventListener('click', () => copyText(finalPrompt));
-        document.getElementById('btnRegenerate').addEventListener('click', generateImage);
+        imgWrap.appendChild(img);
+        imgWrap.appendChild(imgLoadingMsg);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const btnDownload = document.createElement('button');
+        btnDownload.className = 'action-btn';
+        btnDownload.id = 'btnDownload';
+        btnDownload.textContent = '⬇️ Download';
+        btnDownload.addEventListener('click', downloadImage);
+
+        const btnCopyPrompt = document.createElement('button');
+        btnCopyPrompt.className = 'action-btn';
+        btnCopyPrompt.id = 'btnCopyPrompt';
+        btnCopyPrompt.textContent = '📋 Copy Prompt';
+        btnCopyPrompt.addEventListener('click', () => copyText(finalPrompt));
+
+        const btnRegenerate = document.createElement('button');
+        btnRegenerate.className = 'action-btn';
+        btnRegenerate.id = 'btnRegenerate';
+        btnRegenerate.textContent = '🔄 Regenerate';
+        btnRegenerate.addEventListener('click', generateImage);
+
+        actions.appendChild(btnDownload);
+        actions.appendChild(btnCopyPrompt);
+        actions.appendChild(btnRegenerate);
+
+        const promptMeta = document.createElement('div');
+        promptMeta.className = 'prompt-meta';
+        const promptLabel = document.createElement('strong');
+        promptLabel.textContent = 'Prompt used:';
+        const promptVal = document.createTextNode(' ' + finalPrompt);
+        promptMeta.appendChild(promptLabel);
+        promptMeta.appendChild(promptVal);
+
+        const modelMeta = document.createElement('div');
+        modelMeta.className = 'model-meta';
+        const modelSpan = document.createElement('span');
+        modelSpan.innerHTML = `<strong>Model:</strong> ${sanitizeHTML(model)}`;
+        const sizeSpan = document.createElement('span');
+        sizeSpan.innerHTML = `<strong>Size:</strong> ${selectedRatio.width}x${selectedRatio.height} (${sanitizeHTML(selectedRatio.ratio)})`;
+        modelMeta.appendChild(modelSpan);
+        modelMeta.appendChild(sizeSpan);
+
+        wrapper.appendChild(imgWrap);
+        wrapper.appendChild(actions);
+        wrapper.appendChild(promptMeta);
+        wrapper.appendChild(modelMeta);
+
+        resultContent.innerHTML = '';
+        resultContent.appendChild(wrapper);
 
         // Save to history
-        saveToHistory(finalPrompt, fullUrl);
+        saveToHistory(basePrompt, finalPrompt, fullUrl);
 
     } catch (err) {
         showError(`Failed to generate image: ${err.message}`);
@@ -306,10 +407,13 @@ async function generateImage() {
     }
 }
 
-function saveToHistory(prompt, url) {
+// --- History ---
+
+function saveToHistory(originalPrompt, finalPrompt, url) {
     const newItem = {
         id: Date.now(),
-        prompt: prompt,
+        originalPrompt: originalPrompt,
+        prompt: finalPrompt,
         url: url,
         timestamp: new Date().toLocaleString()
     };
@@ -324,26 +428,55 @@ function saveToHistory(prompt, url) {
 
 function renderHistory() {
     if (historyList.length === 0) {
-        historyListEl.innerHTML = '<p style="color: #aaa; font-size: 0.9rem; text-align: center; padding: 20px 0;">No history yet. Start generating!</p>';
+        historyListEl.innerHTML = '';
+        const empty = document.createElement('p');
+        empty.style.cssText = 'color:#aaa;font-size:0.9rem;text-align:center;padding:20px 0;';
+        empty.textContent = 'No history yet. Start generating!';
+        historyListEl.appendChild(empty);
         return;
     }
 
-    historyListEl.innerHTML = historyList.map((item, index) => `
-        <div class="history-item" data-index="${index}">
-            <img src="${item.url}" alt="History item" loading="lazy">
-            <div class="prompt-text" title="${item.prompt}">${item.prompt}</div>
-            <div class="meta-text">
-                <span>${item.timestamp}</span>
-            </div>
-        </div>
-    `).join('');
+    historyListEl.innerHTML = '';
 
-    // Event delegation for history items
-    historyListEl.querySelectorAll('.history-item[data-index]').forEach(el => {
-        el.addEventListener('click', () => {
-            const idx = parseInt(el.getAttribute('data-index'), 10);
-            loadHistoryItem(historyList[idx]);
+    historyList.forEach((item, index) => {
+        const el = document.createElement('div');
+        el.className = 'history-item';
+        el.dataset.index = index;
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', `Load: ${item.originalPrompt || item.prompt}`);
+
+        const img = document.createElement('img');
+        img.src = item.url;
+        img.alt = sanitizeHTML(item.originalPrompt || item.prompt);
+        img.loading = 'lazy';
+
+        const promptDiv = document.createElement('div');
+        promptDiv.className = 'history-prompt';
+        promptDiv.title = item.originalPrompt || item.prompt;
+        promptDiv.textContent = item.originalPrompt || item.prompt;
+
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'history-meta';
+
+        const timeSpan = document.createElement('span');
+        timeSpan.textContent = item.timestamp;
+        metaDiv.appendChild(timeSpan);
+
+        el.appendChild(img);
+        el.appendChild(promptDiv);
+        el.appendChild(metaDiv);
+
+        const handleLoad = () => loadHistoryItem(historyList[index]);
+        el.addEventListener('click', handleLoad);
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleLoad();
+            }
         });
+
+        historyListEl.appendChild(el);
     });
 }
 
@@ -353,31 +486,63 @@ function loadHistoryItem(item) {
     resultArea.style.display = 'block';
 
     // Reset enhancements UI
-    isActiveEnhanced.value = "false";
+    isActiveEnhanced.value = 'false';
     enhancedPromptBox.classList.remove('active');
-    promptInput.value = item.prompt.split(',')[0].trim();
+
+    // Restore original prompt (not the potentially-comma-heavy final prompt)
+    promptInput.value = item.originalPrompt || item.prompt;
 
     generatedImageUrl = item.url;
-    resultContent.innerHTML = `
-        <img src="${item.url}" alt="Generated image" class="result-image">
-        <div class="actions">
-            <button class="action-btn" id="btnDownloadHistory">⬇️ Download</button>
-            <button class="action-btn" id="btnCopyHistory">📋 Copy Prompt</button>
-        </div>
-        <div style="margin-top: 15px; font-size: 0.85rem; color: #888; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-            <strong>Prompt used:</strong> ${item.prompt}
-        </div>
-    `;
 
-    document.getElementById('btnDownloadHistory').addEventListener('click', downloadImage);
-    document.getElementById('btnCopyHistory').addEventListener('click', () => copyText(item.prompt));
+    // Build result DOM safely
+    const wrapper = document.createElement('div');
 
-    // Scroll to results
+    const img = document.createElement('img');
+    img.src = item.url;
+    img.alt = sanitizeHTML(item.originalPrompt || item.prompt);
+    img.className = 'result-image';
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const btnDownloadHistory = document.createElement('button');
+    btnDownloadHistory.className = 'action-btn';
+    btnDownloadHistory.id = 'btnDownloadHistory';
+    btnDownloadHistory.textContent = '⬇️ Download';
+    btnDownloadHistory.addEventListener('click', downloadImage);
+
+    const btnCopyHistory = document.createElement('button');
+    btnCopyHistory.className = 'action-btn';
+    btnCopyHistory.id = 'btnCopyHistory';
+    btnCopyHistory.textContent = '📋 Copy Prompt';
+    btnCopyHistory.addEventListener('click', () => copyText(item.prompt));
+
+    actions.appendChild(btnDownloadHistory);
+    actions.appendChild(btnCopyHistory);
+
+    const promptMeta = document.createElement('div');
+    promptMeta.className = 'prompt-meta';
+    const promptLabel = document.createElement('strong');
+    promptLabel.textContent = 'Prompt used:';
+    const promptVal = document.createTextNode(' ' + item.prompt);
+    promptMeta.appendChild(promptLabel);
+    promptMeta.appendChild(promptVal);
+
+    wrapper.appendChild(img);
+    wrapper.appendChild(actions);
+    wrapper.appendChild(promptMeta);
+
+    resultContent.innerHTML = '';
+    resultContent.appendChild(wrapper);
+
     resultArea.scrollIntoView({ behavior: 'smooth' });
 }
 
+// --- Helpers ---
+
 function showError(message) {
-    resultContent.innerHTML = `<div class="error">⚠️ ${message}</div>`;
+    resultArea.style.display = 'block';
+    resultContent.innerHTML = `<div class="error">⚠️ ${sanitizeHTML(message)}</div>`;
 }
 
 async function downloadImage() {
@@ -395,29 +560,46 @@ async function downloadImage() {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
     } catch (err) {
-        console.error("Download failed, falling back to new tab", err);
+        console.error('Download failed, falling back to new tab', err);
         window.open(generatedImageUrl, '_blank');
     }
 }
 
-function copyText(text) {
-    navigator.clipboard.writeText(text);
-    alert('Prompt copied to clipboard!');
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('Prompt copied to clipboard!', 'success');
+    } catch (err) {
+        // Fallback for HTTP or denied permission
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('Prompt copied to clipboard!', 'success');
+        } catch {
+            showToast('Could not copy — please copy manually.', 'error');
+        }
+    }
 }
 
 async function testApiConnection() {
     const apiStatus = document.getElementById('apiStatus');
     const btnTestApi = document.getElementById('btnTestApi');
-    
+
     if (!apiStatus || !btnTestApi) return;
-    
+
     btnTestApi.disabled = true;
     btnTestApi.textContent = '🔍 Testing...';
     apiStatus.textContent = 'Testing Pollinations API connection...';
     apiStatus.style.color = '#aaa';
-    
+
     try {
-        // Test with a simple image request (includes API key)
         const testParams = new URLSearchParams({
             model: 'flux',
             width: '100',
@@ -426,7 +608,6 @@ async function testApiConnection() {
             key: POLLINATIONS_KEY
         });
         const testUrl = `${IMAGE_URL}/image/test?${testParams.toString()}`;
-
         const response = await fetch(testUrl, { method: 'HEAD' });
 
         if (response.ok) {
@@ -441,11 +622,11 @@ async function testApiConnection() {
         apiStatus.style.color = '#f87171';
     } finally {
         btnTestApi.disabled = false;
-        btnTestApi.textContent = '🔍 Test API Connection';
+        btnTestApi.textContent = '🔍 Test Connection';
     }
 }
 
-// Allow Enter key to submit (but not in textarea normally)
+// Allow Ctrl+Enter to submit
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.ctrlKey) {
         generateImage();

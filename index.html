@@ -478,7 +478,63 @@
             font-family: 'Space Mono', monospace;
             font-size: 0.7rem;
             margin-top: 10px;
-            color: var(--muted);
+            color: var(--text-muted);
+        }
+
+        /* Image loading message */
+        .img-loading-msg {
+            color: #aaa;
+            font-size: 0.9rem;
+            margin-top: 8px;
+        }
+
+        /* Model / size meta row */
+        .model-meta {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: #666;
+            background: rgba(0,0,0,0.15);
+            padding: 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(16px);
+            background: var(--surface-2);
+            color: var(--text);
+            border: var(--border);
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            padding: 12px 20px;
+            box-shadow: var(--shadow);
+            opacity: 0;
+            transition: opacity 0.25s, transform 0.25s;
+            z-index: 1000;
+            max-width: 90vw;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .toast.toast-visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast-success {
+            border-color: #4ade80;
+            color: #4ade80;
+        }
+
+        .toast-error {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         /* Footer */
@@ -685,35 +741,35 @@
                 <div class="input-group">
                     <label>Style</label>
                     <div class="pills" id="styleOptions">
-                        <button class="pill active" data-style="">None</button>
-                        <button class="pill" data-style="photorealistic, high detail, professional photography">Realistic</button>
-                        <button class="pill" data-style="anime style, vibrant colors, detailed illustration">Anime</button>
-                        <button class="pill" data-style="digital art, concept art, highly detailed">Digital</button>
-                        <button class="pill" data-style="oil painting, classical style, masterpiece">Oil</button>
-                        <button class="pill" data-style="watercolor painting, soft colors, artistic">Watercolor</button>
+                        <button class="pill active" data-style="" aria-pressed="true">None</button>
+                        <button class="pill" data-style="photorealistic, high detail, professional photography" aria-pressed="false">Realistic</button>
+                        <button class="pill" data-style="anime style, vibrant colors, detailed illustration" aria-pressed="false">Anime</button>
+                        <button class="pill" data-style="digital art, concept art, highly detailed" aria-pressed="false">Digital</button>
+                        <button class="pill" data-style="oil painting, classical style, masterpiece" aria-pressed="false">Oil</button>
+                        <button class="pill" data-style="watercolor painting, soft colors, artistic" aria-pressed="false">Watercolor</button>
                     </div>
                 </div>
 
                 <div class="input-group">
                     <label>Ratio</label>
                     <div class="ratio-grid" id="aspectRatioOptions">
-                        <button class="ratio-btn active" data-ratio="1:1" data-width="1024" data-height="1024">
+                        <button class="ratio-btn active" data-ratio="1:1" data-width="1024" data-height="1024" aria-pressed="true">
                             <span class="ratio-icon">⬜</span>
                             1:1
                         </button>
-                        <button class="ratio-btn" data-ratio="16:9" data-width="1280" data-height="720">
+                        <button class="ratio-btn" data-ratio="16:9" data-width="1280" data-height="720" aria-pressed="false">
                             <span class="ratio-icon">📺</span>
                             16:9
                         </button>
-                        <button class="ratio-btn" data-ratio="9:16" data-width="720" data-height="1280">
+                        <button class="ratio-btn" data-ratio="9:16" data-width="720" data-height="1280" aria-pressed="false">
                             <span class="ratio-icon">📱</span>
                             9:16
                         </button>
-                        <button class="ratio-btn" data-ratio="4:3" data-width="1152" data-height="896">
+                        <button class="ratio-btn" data-ratio="4:3" data-width="1152" data-height="896" aria-pressed="false">
                             <span class="ratio-icon">◻️</span>
                             4:3
                         </button>
-                        <button class="ratio-btn" data-ratio="3:4" data-width="896" data-height="1152">
+                        <button class="ratio-btn" data-ratio="3:4" data-width="896" data-height="1152" aria-pressed="false">
                             <span class="ratio-icon">📄</span>
                             3:4
                         </button>
