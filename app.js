@@ -5,7 +5,18 @@
 // ⚠️ IMPORTANT: Restrict this key to your domain at enter.pollinations.ai
 const IMAGE_URL = 'https://gen.pollinations.ai';
 const TEXT_URL = 'https://gen.pollinations.ai/text';
-const POLLINATIONS_KEY = 'pk_pFTa9RWkfLIkPq2f'; // ⚠️ Replace with YOUR Pollinations API key
+const POLLINATIONS_KEY = ''; // ⚠️ Replace with YOUR Pollinations API key
+
+// Security Helper
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
 // State
 let currentMode = 'free';
@@ -251,7 +262,7 @@ async function generateImage() {
 
         resultContent.innerHTML = `
             <div style="position:relative;">
-                <img src="${fullUrl}" alt="Generated image" class="result-image"
+                <img src="${escapeHTML(fullUrl)}" alt="Generated image" class="result-image"
                      id="resultImage"
                      style="opacity:0;transition:opacity 0.5s;"
                      crossorigin="anonymous">
@@ -263,11 +274,11 @@ async function generateImage() {
                 <button class="action-btn" id="btnRegenerate">\ud83d\udd04 Regenerate</button>
             </div>
             <div style="margin-top:15px;font-size:0.85rem;color:#888;background:rgba(0,0,0,0.2);padding:10px;border-radius:8px;">
-                <strong>Prompt used:</strong> ${finalPrompt}
+                <strong>Prompt used:</strong> ${escapeHTML(finalPrompt)}
             </div>
             <div style="margin-top:8px;font-size:0.75rem;color:#666;background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
-                <span><strong>Model:</strong> ${model}</span>
-                <span><strong>Size:</strong> ${selectedRatio.width}x${selectedRatio.height} (${selectedRatio.ratio})</span>
+                <span><strong>Model:</strong> ${escapeHTML(model)}</span>
+                <span><strong>Size:</strong> ${escapeHTML(selectedRatio.width)}x${escapeHTML(selectedRatio.height)} (${escapeHTML(selectedRatio.ratio)})</span>
             </div>
         `;
 
@@ -330,10 +341,10 @@ function renderHistory() {
 
     historyListEl.innerHTML = historyList.map((item, index) => `
         <div class="history-item" data-index="${index}">
-            <img src="${item.url}" alt="History item" loading="lazy">
-            <div class="prompt-text" title="${item.prompt}">${item.prompt}</div>
+            <img src="${escapeHTML(item.url)}" alt="History item" loading="lazy">
+            <div class="prompt-text" title="${escapeHTML(item.prompt)}">${escapeHTML(item.prompt)}</div>
             <div class="meta-text">
-                <span>${item.timestamp}</span>
+                <span>${escapeHTML(item.timestamp)}</span>
             </div>
         </div>
     `).join('');
@@ -359,13 +370,13 @@ function loadHistoryItem(item) {
 
     generatedImageUrl = item.url;
     resultContent.innerHTML = `
-        <img src="${item.url}" alt="Generated image" class="result-image">
+        <img src="${escapeHTML(item.url)}" alt="Generated image" class="result-image">
         <div class="actions">
             <button class="action-btn" id="btnDownloadHistory">⬇️ Download</button>
             <button class="action-btn" id="btnCopyHistory">📋 Copy Prompt</button>
         </div>
         <div style="margin-top: 15px; font-size: 0.85rem; color: #888; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-            <strong>Prompt used:</strong> ${item.prompt}
+            <strong>Prompt used:</strong> ${escapeHTML(item.prompt)}
         </div>
     `;
 
@@ -377,7 +388,7 @@ function loadHistoryItem(item) {
 }
 
 function showError(message) {
-    resultContent.innerHTML = `<div class="error">⚠️ ${message}</div>`;
+    resultContent.innerHTML = `<div class="error">⚠️ ${escapeHTML(message)}</div>`;
 }
 
 async function downloadImage() {
