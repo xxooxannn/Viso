@@ -5,7 +5,7 @@
 // ⚠️ IMPORTANT: Restrict this key to your domain at enter.pollinations.ai
 const IMAGE_URL = 'https://gen.pollinations.ai';
 const TEXT_URL = 'https://gen.pollinations.ai/text';
-const POLLINATIONS_KEY = 'pk_AcdSEDf5knIFbQ8n'; // ⚠️ Replace with YOUR Pollinations API key
+const POLLINATIONS_KEY = 'pk_pFTa9RWkfLIkPq2f'; // ⚠️ Replace with YOUR Pollinations API key
 
 // Security Helper
 function escapeHTML(str) {
