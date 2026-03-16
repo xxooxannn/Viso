@@ -4,7 +4,7 @@
 // sk_ = Secret key (server-side only, no rate limits)
 // ⚠️ IMPORTANT: Restrict this key to your domain at enter.pollinations.ai
 const IMAGE_URL = 'https://gen.pollinations.ai';
-const TEXT_URL = 'https://gen.pollinations.ai/text';
+const TEXT_URL = 'https://gen.pollinations.ai/v1/chat/completions';
 const POLLINATIONS_KEY = 'pk_AcdSEDf5knIFbQ8n'; // ⚠️ Replace with YOUR Pollinations API key
 
 // Security Helper
@@ -131,10 +131,20 @@ Just return one creative prompt like:
 "A cyberpunk street food vendor in neon-lit Tokyo alleyway, rain reflections, cinematic lighting, photorealistic"`;
 
     try {
-        const url = `${TEXT_URL}/${encodeURIComponent(sysPrompt)}?model=nova-fast&key=${POLLINATIONS_KEY}`;
-        const res = await fetch(url);
+        const res = await fetch(TEXT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${POLLINATIONS_KEY}`
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: sysPrompt }],
+                model: 'nova-fast'
+            })
+        });
         if (!res.ok) throw new Error(`Text API error: ${res.status}`);
-        const surprisePrompt = await res.text();
+        const data = await res.json();
+        const surprisePrompt = data.choices[0].message.content;
 
         promptInput.value = surprisePrompt.trim();
         isActiveEnhanced.value = "false";
@@ -195,10 +205,20 @@ Enhanced version (rich, detailed, ready for image generation):`;
         btnEnhance.disabled = true;
         btnEnhance.textContent = "✨ Enhancing...";
 
-        const url = `${TEXT_URL}/${encodeURIComponent(sysPrompt)}?model=nova-fast&key=${POLLINATIONS_KEY}`;
-        const res = await fetch(url);
+        const res = await fetch(TEXT_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${POLLINATIONS_KEY}`
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: sysPrompt }],
+                model: 'nova-fast'
+            })
+        });
         if (!res.ok) throw new Error(`Text API error: ${res.status}`);
-        const enhancedContext = await res.text();
+        const data = await res.json();
+        const enhancedContext = data.choices[0].message.content;
 
         enhancedPromptText.textContent = enhancedContext.trim();
         enhancedPromptBox.classList.add('active');
