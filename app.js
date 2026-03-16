@@ -237,6 +237,8 @@ Enhanced version (rich, detailed, ready for image generation):`;
 async function generateImage() {
     resultArea.style.display = 'block';
     const basePrompt = promptInput.value.trim();
+    const negativePromptValue = document.getElementById('negativePrompt') ? document.getElementById('negativePrompt').value.trim() : '';
+    const batchSize = document.getElementById('batchSize') ? parseInt(document.getElementById('batchSize').value, 10) : 1;
     const model = document.getElementById('model').value;
 
     if (!basePrompt) {
@@ -261,71 +263,98 @@ async function generateImage() {
 
     try {
         const encodedPrompt = encodeURIComponent(finalPrompt);
-        const seed = Math.floor(Math.random() * 100000);
-        const imageUrl = `${IMAGE_URL}/image/${encodedPrompt}`;
-        const params = new URLSearchParams({
-            model: model,
-            seed: seed.toString(),
-            width: selectedRatio.width.toString(),
-            height: selectedRatio.height.toString(),
-            nologo: 'true',
-            key: POLLINATIONS_KEY
-        });
-        const fullUrl = `${imageUrl}?${params.toString()}`;
 
         // Check prompt length (Pollinations has limits)
         if (finalPrompt.length > 2000) {
             throw new Error(`Prompt too long (${finalPrompt.length} chars). Max is ~2000 characters.`);
         }
 
-        generatedImageUrl = fullUrl;
+        const batchContainer = document.createElement('div');
+        batchContainer.style.display = 'grid';
+        batchContainer.style.gridTemplateColumns = batchSize > 1 ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr';
+        batchContainer.style.gap = '16px';
+        resultContent.appendChild(batchContainer);
 
-        resultContent.innerHTML = `
-            <div style="position:relative;">
-                <img src="${escapeHTML(fullUrl)}" alt="Generated image" class="result-image"
-                     id="resultImage"
+        let firstUrl = null;
+
+        for (let i = 0; i < batchSize; i++) {
+            const seed = Math.floor(Math.random() * 100000);
+            const imageUrl = `${IMAGE_URL}/image/${encodedPrompt}`;
+            const params = new URLSearchParams({
+                model: model,
+                seed: seed.toString(),
+                width: selectedRatio.width.toString(),
+                height: selectedRatio.height.toString(),
+                nologo: 'true',
+                key: POLLINATIONS_KEY
+            });
+            if (negativePromptValue) {
+                params.append('negative_prompt', negativePromptValue);
+            }
+            const fullUrl = `${imageUrl}?${params.toString()}`;
+
+            if (i === 0) firstUrl = fullUrl;
+
+            const imgContainer = document.createElement('div');
+            imgContainer.style.position = 'relative';
+            imgContainer.innerHTML = `
+                <img src="${escapeHTML(fullUrl)}" alt="Generated image ${i+1}" class="result-image"
                      style="opacity:0;transition:opacity 0.5s;"
                      crossorigin="anonymous">
-                <div id="imgLoadingMsg" style="color:#aaa;font-size:0.9rem;margin-top:8px;">\u23f3 Loading image... (may take 10\u201330 seconds)</div>
-            </div>
-            <div class="actions">
-                <button class="action-btn" id="btnDownload">\u2b07\ufe0f Download</button>
+                <div class="imgLoadingMsg" style="color:#aaa;font-size:0.9rem;margin-top:8px;">\u23f3 Loading image ${i+1}...</div>
+                <div class="actions" style="margin-top:8px;">
+                    <button class="action-btn btnDownloadSpecific" data-url="${escapeHTML(fullUrl)}">\u2b07\ufe0f Download</button>
+                </div>
+            `;
+            batchContainer.appendChild(imgContainer);
+
+            const imgEl = imgContainer.querySelector('img');
+            const msgEl = imgContainer.querySelector('.imgLoadingMsg');
+
+            imgEl.onload = () => {
+                imgEl.style.opacity = 1;
+                msgEl.style.display = 'none';
+            };
+
+            imgEl.onerror = (e) => {
+                console.error(`[Image ${i+1}] Load failed:`, e);
+                msgEl.textContent = `⚠️ Image ${i+1} failed to load.`;
+            };
+
+            // Save to history
+            saveToHistory(finalPrompt, fullUrl);
+        }
+
+        generatedImageUrl = firstUrl;
+
+        const globalActions = document.createElement('div');
+        globalActions.innerHTML = `
+            <div class="actions" style="margin-top: 16px;">
                 <button class="action-btn" id="btnCopyPrompt">\ud83d\udccb Copy Prompt</button>
                 <button class="action-btn" id="btnRegenerate">\ud83d\udd04 Regenerate</button>
             </div>
             <div style="margin-top:15px;font-size:0.85rem;color:#888;background:rgba(0,0,0,0.2);padding:10px;border-radius:8px;">
                 <strong>Prompt used:</strong> ${escapeHTML(finalPrompt)}
+                ${negativePromptValue ? `<br><strong style="margin-top:4px;display:inline-block;">Negative prompt:</strong> ${escapeHTML(negativePromptValue)}` : ''}
             </div>
             <div style="margin-top:8px;font-size:0.75rem;color:#666;background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
                 <span><strong>Model:</strong> ${escapeHTML(model)}</span>
                 <span><strong>Size:</strong> ${escapeHTML(selectedRatio.width)}x${escapeHTML(selectedRatio.height)} (${escapeHTML(selectedRatio.ratio)})</span>
             </div>
         `;
-
-        // Setup image load handlers with better error info
-        const resultImage = document.getElementById('resultImage');
-        const imgLoadingMsg = document.getElementById('imgLoadingMsg');
-
-        resultImage.onload = () => {
-            resultImage.style.opacity = 1;
-            imgLoadingMsg.style.display = 'none';
-        };
-
-        resultImage.onerror = (e) => {
-            console.error('[Image] Load failed:', e);
-            console.error('[Image] URL:', fullUrl);
-            imgLoadingMsg.textContent = `⚠️ Image failed to load. Prompt: ${finalPrompt.length} chars. Try a shorter prompt or different model.`;
-            generateBtn.disabled = false;
-            generateBtn.textContent = 'Generate Image';
-        };
+        resultContent.appendChild(globalActions);
 
         // Setup action button listeners
-        document.getElementById('btnDownload').addEventListener('click', downloadImage);
         document.getElementById('btnCopyPrompt').addEventListener('click', () => copyText(finalPrompt));
         document.getElementById('btnRegenerate').addEventListener('click', generateImage);
 
-        // Save to history
-        saveToHistory(finalPrompt, fullUrl);
+        // Setup individual download buttons
+        document.querySelectorAll('.btnDownloadSpecific').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const url = e.target.getAttribute('data-url');
+                downloadSpecificImage(url);
+            });
+        });
 
     } catch (err) {
         showError(`Failed to generate image: ${err.message}`);
@@ -413,9 +442,14 @@ function showError(message) {
 
 async function downloadImage() {
     if (!generatedImageUrl) return;
+    await downloadSpecificImage(generatedImageUrl);
+}
+
+async function downloadSpecificImage(targetUrl) {
+    if (!targetUrl) return;
 
     try {
-        const response = await fetch(generatedImageUrl);
+        const response = await fetch(targetUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -427,7 +461,7 @@ async function downloadImage() {
         window.URL.revokeObjectURL(url);
     } catch (err) {
         console.error("Download failed, falling back to new tab", err);
-        window.open(generatedImageUrl, '_blank');
+        window.open(targetUrl, '_blank');
     }
 }
 

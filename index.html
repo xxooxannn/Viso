@@ -683,6 +683,20 @@
                 </div>
 
                 <div class="input-group">
+                    <label>Negative Prompt</label>
+                    <textarea id="negativePrompt" placeholder="Describe what you DON'T want to see... (e.g. blurry, text, ugly)" style="min-height: 60px;"></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label>Batch Size</label>
+                    <select id="batchSize">
+                        <option value="1">1 Image</option>
+                        <option value="2">2 Images</option>
+                        <option value="4">4 Images</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
                     <label>Style</label>
                     <div class="pills" id="styleOptions">
                         <button class="pill active" data-style="">None</button>
